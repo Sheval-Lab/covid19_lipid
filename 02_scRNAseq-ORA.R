@@ -37,7 +37,7 @@ degs <- map(degs_files, read_tsv, id = "dataset") %>%
 # Filter DGEA results ----------------------------------------------------------
 degs_flt <- degs %>% 
   filter(status != "Stable") %>% 
-  dplyr::select(gene, status, celltype, dataset) %>% 
+  dplyr::select(gene, status, avg_log2FC, celltype, dataset) %>% 
   # Rename mitochondrial genes to be found in org.Hs.eg.db
   mutate(gene = str_remove(gene, "^MT-")) 
   
@@ -57,6 +57,7 @@ write_tsv(degs_flt, file.path(res_dir, "degs_combined_table.txt"))
 # Group DEGs by cell type (referred to as subtype in SCovid DB) and dataset ----
 ## Make nested column for dataset:tissue:UpDown groupping 
 degs_by_celltype <- degs_flt %>% 
+  dplyr::select(-avg_log2FC) %>% 
   group_by(celltype, dataset, status) %>% 
   nest() %>% 
   ungroup() %>% 
@@ -187,6 +188,14 @@ go_lipid_revigo_imp_2genetable <- go_lipid_revigo_imp_res %>%
   dplyr::select(ID, Description, geneID, status, celltype, Tissue, dataset, `Dataset name`) 
 
 write_tsv(go_lipid_revigo_imp_2genetable, file.path(res_dir, "go_lipid_revigo_imp_degs.txt"))
+
+### Add log2FC values
+go_lipid_revigo_imp_2genetable_lfc <- go_lipid_revigo_imp_2genetable %>% 
+  separate_rows(geneID, sep = "/") %>% 
+  left_join(degs_flt, by = c("geneID" = "gene", "status", "celltype", "dataset")) %>% 
+  dplyr::select(ID, Description, geneID, status, avg_log2FC, celltype, Tissue, dataset, `Dataset name`)
+
+write_tsv(go_lipid_revigo_imp_2genetable_lfc, file.path(res_dir, "go_lipid_revigo_imp_degs_lfc.txt"))
 
 
 ## KEGG

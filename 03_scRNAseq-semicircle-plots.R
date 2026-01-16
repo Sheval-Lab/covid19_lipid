@@ -15,9 +15,9 @@ theme_set(
   theme_bw() +
     theme(
       legend.justification = c("right"),
-      strip.text = element_text(size = rel(1.1)),
+      strip.text = element_text(size = rel(1.04)),
       axis.text = element_text(color = "black", size = rel(0.9)),
-      axis.text.x = element_text(angle = 35, hjust = 1)))
+      axis.text.x = element_text(angle = 35, hjust = 1, size = rel(0.85))))
 
 
 # Input data -------------------------------------------------------------------
@@ -277,8 +277,8 @@ go_lipid_revigo_imp_2plot_by_celltype_lung /
   plot_layout(guides = "collect") &
   theme(legend.position = "top")
 
-ggsave(file.path(res_dir, "GOBP_by_celltype_lipid_keywords.HC.png"), device = agg_png, dpi = 300, width = 16, height = 18, units = "cm", scaling = 0.6)
-ggsave(file.path(res_dir, "GOBP_by_celltype_lipid_keywords.HC.svg"), width = 16, height = 18, units = "cm", scale = 1/0.6)
+ggsave(file.path(res_dir, "GOBP_by_celltype_lipid_keywords.HC.png"), device = agg_png, dpi = 300, width = 14, height = 16, units = "cm", scaling = 0.55)
+ggsave(file.path(res_dir, "GOBP_by_celltype_lipid_keywords.HC.svg"), width = 14, height = 16, units = "cm", scale = 1/0.55)
 
 
 ### KEGG ----------------------------------------------------------------------
