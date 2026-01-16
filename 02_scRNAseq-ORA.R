@@ -16,6 +16,7 @@ res_dir <- file.path("results", "scRNAseq", "02_ORA")
 ds_meta <- read_tsv("sc_dataset_meta.txt")
 
 ### Exclude datasets of organoids/cells infected with SARS-CoV-2 in vitro
+### GSE156760 includes 2 datasets (colon + ileum)
 datasets_2exclude <- c(
   "GSE159556", "GSE182298", "GSE167747", "GSE178404", "GSE208034", "GSE166766",
   "GSE156760", "GSE151878")

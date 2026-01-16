@@ -20,17 +20,12 @@ theme_set(
 
 
 # Input data -------------------------------------------------------------------
-## Datasets meta ---------------------------------------------------------------
-ds_meta <- read_tsv("sc_dataset_meta_upd.txt")
-
-
-## GO ORA results with gene log2FC values --------------------------------------
+## GO ORA results with gene log2FC values 
 go_lipid_revigo_imp_2genetable_lfc <- read_tsv(file.path(data_dir, "go_lipid_revigo_imp_degs_lfc.txt"))
 
-### Calculate average log2FC per dataset 
+## Calculate average log2FC per dataset 
 go_lipid_revigo_imp_2genetable_lfc_avg <- go_lipid_revigo_imp_2genetable_lfc %>% 
-  left_join(ds_meta, by = c("dataset", "Tissue", "Dataset name")) %>% 
-  dplyr::filter(Tissue == "Lung", Tissue_type == "Solid tissue") %>%
+  dplyr::filter(Tissue %in% c("Lung", "Airway")) %>%
   mutate(celltype_tidy = str_remove_all(celltype, "^[A-Z0-9]*_|_[A-Z0-9]*$")) %>% 
   dplyr::select(celltype_tidy, avg_log2FC, status, dataset) %>% 
   distinct() %>% 
@@ -38,6 +33,11 @@ go_lipid_revigo_imp_2genetable_lfc_avg <- go_lipid_revigo_imp_2genetable_lfc %>%
   summarise(
     n = n(),
     avg_avg_log2FC = mean(avg_log2FC)) %>% 
+  ungroup() 
+
+go_lipid_revigo_imp_2genetable_lfc_avg %>% 
+  group_by(celltype_tidy, status) %>% 
+  summarise(avg_avg_log2FC = mean(avg_avg_log2FC)) %>% 
   ungroup() 
 
 
@@ -58,6 +58,9 @@ go_lipid_revigo_imp_2genetable_lfc_avg %>%
     vars(status), 
     scales = "free_x", 
     labeller = as_labeller(c("Up" = "Upregulated", "Down" = "Downregulated"))) +
+  facetted_pos_scales(x = list(
+    scale_x_continuous(breaks = c(1, 2.5, 4)),
+    scale_x_continuous(limits = c(-3, -1), breaks = seq(-3, -1, 1)))) +
   scale_color_manual(values = c("#f4a261", "#0a9396")) + 
   labs(x = "Average log2FC", y = NULL) 
 
