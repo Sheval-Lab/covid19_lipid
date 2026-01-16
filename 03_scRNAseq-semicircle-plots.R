@@ -37,6 +37,8 @@ ds_meta <- ds_meta %>%
       .default = NA_character_),
     Tissue_type = factor(Tissue_type, levels = c("Solid tissue", "Solid\ntissue", "BALF", "ETA", "Bronchial\nbrushing")))
 
+write_tsv(ds_meta, "sc_dataset_meta_upd.txt")
+
 
 ## GO ORA results --------------------------------------------------------------
 ### Redundant terms are substituted with representative ones
