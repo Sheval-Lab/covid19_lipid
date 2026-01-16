@@ -103,7 +103,7 @@ go_by_celltype_df <- ora_by_celltype$go_bp %>%
 
 
 ## Lipid-related words
-lipid_terms <- c("lipid", "fat", "triglyceride", "cholesterol")
+lipid_terms <- c("lipid", "fat", "triglyceride", "triacylglycerol", "cholesterol")
 nonlipid_terms <- c("fate", "sulfat")
 
 go_lipid <- go_by_celltype_df %>%
