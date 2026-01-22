@@ -9,6 +9,15 @@ res_dir <- file.path("results", "scRNAseq", "01_DGEA")
 
 
 # Input data -------------------------------------------------------------------
+## Datasets meta
+ds_meta <- read_tsv("sc_dataset_meta.txt")
+
+### Exclude datasets that did not pass filters
+ds_meta <- ds_meta %>% filter(Dataset != "Exclude")
+
+## Samples neta
+s_meta <- read_tsv("sc_samples_meta.txt")
+
 ## Raw counts
 raw_counts_files <- list.files(data_dir, pattern = "raw_counts", full.names = TRUE)
 
@@ -21,7 +30,7 @@ dataset_ids <- raw_counts_files %>%
 
 
 # DGEA -------------------------------------------------------------------------
-run_sc_dgea <- function(ds_id, raw_counts_file, meta_file) {
+run_sc_dgea <- function(ds_id, raw_counts_file, meta_file, add_s_meta = s_meta) {
   print(paste("Start", ds_id))
   
   # Read raw counts
@@ -31,6 +40,12 @@ run_sc_dgea <- function(ds_id, raw_counts_file, meta_file) {
   meta = read.csv(meta_file, row.names = 1)
   rownames(meta) = rownames(meta) %>% 
     str_replace_all("-", ".")
+  
+  # Add corrected samples meta
+  meta = meta %>% 
+    rownames_to_column("CellID") %>% 
+    left_join(add_s_meta, by = c("orig.ident" = "Sample_GEO"))
+  rownames(meta) = meta$CellID
   
   # Reorder cells in metadata to match counts matrix colnames
   meta = meta[colnames(mtx),]
@@ -45,7 +60,7 @@ run_sc_dgea <- function(ds_id, raw_counts_file, meta_file) {
   sobj = NormalizeData(sobj)
   
   # Rename cells based on cell type (referred to as subtype in SCovid DB) and disease status
-  sobj$group = paste(sobj$subtype, sobj$Status, sep = ":")
+  sobj$group = paste(sobj$subtype, sobj$Status_GEO, sep = ":")
   Idents(sobj) = "group"
   
   # Create table with contrasts (cell type X: COVID-19 vs Healthy)
@@ -88,4 +103,5 @@ tibble(
   ds_id = dataset_ids, 
   raw_counts_file = raw_counts_files, 
   meta_file = meta_files) %>% 
+  filter(ds_id %in% ds_meta$Dataset) %>% 
   pwalk(run_sc_dgea)

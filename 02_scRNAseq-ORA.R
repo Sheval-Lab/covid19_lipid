@@ -15,20 +15,16 @@ res_dir <- file.path("results", "scRNAseq", "02_ORA")
 ## Datasets meta
 ds_meta <- read_tsv("sc_dataset_meta.txt")
 
-### Exclude datasets of organoids/cells infected with SARS-CoV-2 in vitro
-### GSE156760 includes 2 datasets (colon + ileum)
-datasets_2exclude <- c(
-  "GSE159556", "GSE182298", "GSE167747", "GSE178404", "GSE208034", "GSE166766",
-  "GSE156760", "GSE151878")
-
+### Exclude datasets that did not pass filters
+ds_meta <- ds_meta %>% filter(Dataset != "Exclude")
 
 ## DGEA results 
 degs_files <- list.files(data_dir, pattern = "*.degs.txt", full.names = TRUE)
 
-degs <- map(degs_files, read_tsv, id = "dataset") %>% 
+degs <- map(degs_files, read_tsv, id = "Dataset") %>% 
   list_rbind() %>% 
   mutate(
-    dataset = str_remove(basename(dataset), ".degs.txt"),
+    Dataset = str_remove(basename(Dataset), ".degs.txt"),
     status = case_when(
       (p_val_adj <= 0.05) & (avg_log2FC >= 1) ~ "Up",
       (p_val_adj <= 0.05) & (avg_log2FC <= (-1)) ~ "Down",
@@ -38,10 +34,10 @@ degs <- map(degs_files, read_tsv, id = "dataset") %>%
 # Filter DGEA results ----------------------------------------------------------
 degs_flt <- degs %>% 
   filter(status != "Stable") %>% 
-  dplyr::select(gene, status, avg_log2FC, celltype, dataset) %>% 
+  dplyr::select(gene, status, avg_log2FC, celltype, Dataset) %>% 
   # Rename mitochondrial genes to be found in org.Hs.eg.db
   mutate(gene = str_remove(gene, "^MT-")) 
-  
+
 
 ## Convert SYMBOL to ENTREZ IDs ------------------------------------------------
 degs_entrez <- bitr(degs_flt$gene, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = "org.Hs.eg.db") %>% 
@@ -57,12 +53,12 @@ write_tsv(degs_flt, file.path(res_dir, "degs_combined_table.txt"))
 
 # Group DEGs by cell type (referred to as subtype in SCovid DB) and dataset ----
 ## Make nested column for dataset:tissue:UpDown groupping 
-degs_by_celltype <- degs_flt %>% 
+ora_by_celltype <- degs_flt %>% 
   dplyr::select(-avg_log2FC) %>% 
-  group_by(celltype, dataset, status) %>% 
+  group_by(celltype, Dataset, status) %>% 
   nest() %>% 
   ungroup() %>% 
-  mutate(celltype_dataset_status = str_c(celltype, dataset, status, sep = "//"))
+  mutate(celltype_dataset_status = str_c(celltype, Dataset, status, sep = "//"))
 
 
 # Functional enrichment --------------------------------------------------------
@@ -87,7 +83,7 @@ run_enrichKEGG <- function(data){
 
 
 ## Run ORA ---------------------------------------------------------------------
-ora_by_celltype$go_bp <- map(degs_by_celltype$data, run_enrichGO)
+ora_by_celltype$go_bp <- map(ora_by_celltype$data, run_enrichGO)
 ora_by_celltype$kegg <- map(ora_by_celltype$data, run_enrichKEGG)
 
 
@@ -100,7 +96,7 @@ saveRDS(ora_by_celltype, file.path(res_dir, "ora_by_celltype.rds"))
 go_by_celltype_df <- ora_by_celltype$go_bp %>% 
   map2(ora_by_celltype$celltype_dataset_status, ., ~ add_column(.y, celltype_dataset_status = .x)) %>% 
   list_rbind() %>% 
-  separate(celltype_dataset_status, into = c("celltype", "dataset", "status"), sep = "//")
+  separate(celltype_dataset_status, into = c("celltype", "Dataset", "status"), sep = "//")
 
 
 ## Lipid-related words
@@ -108,8 +104,6 @@ lipid_terms <- c("lipid", "fat", "triglyceride", "triacylglycerol", "cholesterol
 nonlipid_terms <- c("fate", "sulfat")
 
 go_lipid <- go_by_celltype_df %>%
-  # Remove 'in vitro' datasets 
-  dplyr::filter(str_detect(dataset, paste(datasets_2exclude, collapse = "|"), negate = TRUE)) %>% 
   # Keep only significant GO BP terms
   dplyr::filter(qvalue <= 0.05) %>% 
   # Keep only GO BP terms related to lipids metabolism
@@ -149,7 +143,10 @@ go_lipid_revigo_imp <- go_lipid_revigo %>%
   left_join(go_lipid_map, by = c("TermID_revigo" = "ID"))
 
 go_lipid_revigo_imp_res <- go_lipid %>% 
-  left_join(dplyr::select(go_lipid_revigo_imp, TermID, TermID_revigo, Description_revigo), by = c("ID" = "TermID"))
+  left_join(dplyr::select(go_lipid_revigo_imp, TermID, TermID_revigo, Description_revigo), by = c("ID" = "TermID")) %>% 
+  mutate(
+    TermID_revigo = if_else(is.na(TermID_revigo), ID, TermID_revigo),
+    Description_revigo = if_else(is.na(Description_revigo), Description, Description_revigo))
 
 ## Save filtered ORA results 
 write_tsv(go_lipid_revigo_imp_res, file.path(res_dir, "go_lipid_revigo_imp_res.txt"))
@@ -160,12 +157,10 @@ write_tsv(go_lipid_revigo_imp_res, file.path(res_dir, "go_lipid_revigo_imp_res.t
 kegg_by_celltype_df <- ora_by_celltype$kegg %>% 
   map2(ora_by_celltype$celltype_dataset_status, ., ~ add_column(.y, celltype_dataset_status = .x)) %>% 
   list_rbind() %>% 
-  separate(celltype_dataset_status, into = c("celltype", "dataset", "status"), sep = "//")
+  separate(celltype_dataset_status, into = c("celltype", "Dataset", "status"), sep = "//")
 
 
 kegg_lipid <- kegg_by_celltype_df %>%
-  # Remove 'in vitro' datasets 
-  dplyr::filter(str_detect(dataset, paste(datasets_2exclude, collapse = "|"), negate = TRUE)) %>% 
   # Keep only significant KEGG pathways
   dplyr::filter(qvalue <= 0.05) %>% 
   # Keep only KEGG pathways related to lipids metabolism
@@ -185,25 +180,23 @@ write_tsv(kegg_lipid, file.path(res_dir, "kegg_lipid.txt"))
 # Retrieve DE genes in GO terms and KEGG pathways ------------------------------
 ## GO BP
 go_lipid_revigo_imp_2genetable <- go_lipid_revigo_imp_res %>% 
-  left_join(ds_meta, by = "dataset") %>% 
-  dplyr::select(ID, Description, geneID, status, celltype, Tissue, dataset, `Dataset name`) 
+  left_join(ds_meta, by = "Dataset") %>% 
+  dplyr::select(ID, Description, geneID, status, celltype, Tissue, Dataset, `Dataset name for plot`) 
 
 write_tsv(go_lipid_revigo_imp_2genetable, file.path(res_dir, "go_lipid_revigo_imp_degs.txt"))
 
 ### Add log2FC values
 go_lipid_revigo_imp_2genetable_lfc <- go_lipid_revigo_imp_2genetable %>% 
   separate_rows(geneID, sep = "/") %>% 
-  left_join(degs_flt, by = c("geneID" = "gene", "status", "celltype", "dataset")) %>% 
-  dplyr::select(ID, Description, geneID, status, avg_log2FC, celltype, Tissue, dataset, `Dataset name`)
+  left_join(degs_flt, by = c("geneID" = "gene", "status", "celltype", "Dataset")) %>% 
+  dplyr::select(ID, Description, geneID, status, avg_log2FC, celltype, Tissue, Dataset, `Dataset name for plot`)
 
 write_tsv(go_lipid_revigo_imp_2genetable_lfc, file.path(res_dir, "go_lipid_revigo_imp_degs_lfc.txt"))
 
 
 ## KEGG
 kegg_lipid_2genetable <- kegg_lipid %>% 
-  left_join(ds_meta, by = "dataset") %>% 
-  dplyr::select(ID, Description, geneID, status, celltype, Tissue, dataset, `Dataset name`) 
+  left_join(ds_meta, by = "Dataset") %>% 
+  dplyr::select(ID, Description, geneID, status, celltype, Tissue, Dataset, `Dataset name for plot`) 
 
 write_tsv(kegg_lipid_2genetable, file.path(res_dir, "kegg_lipid_degs.txt"))
-
-
